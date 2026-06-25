@@ -92,11 +92,23 @@
   h3{font-size:13px;margin:18px 0 9px;color:var(--accent);}
   .note{font-size:11.5px;color:var(--mut);line-height:1.6;margin-top:8px;}
   .reset{font-size:11px;color:var(--mut);text-align:center;margin-top:8px;cursor:pointer;text-decoration:underline;}
+  body.view #quests{pointer-events:none;opacity:.55;}
+  body.view #resetDay{display:none;}
+  .tp{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;margin-bottom:6px;
+    background:var(--bg2);border:1px solid var(--line);}
+  .tp .w{font-size:10px;color:var(--gold);width:30px;font-weight:700;}
+  .tp .t{font-size:12.5px;flex:1;}
+  .tp .v{font-size:11px;color:var(--mut);}
 </style>
 </head>
 <body>
 
 <div class="wrap">
+
+  <div id="viewBanner" style="display:none;background:#10283a;border:1px solid #1f5d6e;border-radius:12px;
+    padding:10px 13px;margin-bottom:14px;font-size:12.5px;color:#7fd4c0;">
+    👀 閲覧モード｜TAKUHAの100日チャレンジを見てるよ。タップしても記録は変わりません。
+  </div>
 
   <!-- ===== ステータス（共通ヘッダ） ===== -->
   <div class="card">
@@ -186,17 +198,40 @@
     </div>
   </div>
 
+  <!-- ===== タブ：全体マップ（暗号通貨チャート風） ===== -->
+  <div class="page" id="p-chart">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div class="sec" style="margin:0;">$TAKUHA / 100日チャート</div>
+        <span style="font-size:11px;color:var(--ok);">10/1 OPEN ＝ 上場</span>
+      </div>
+      <div style="font-size:11px;color:var(--mut);margin:6px 0 12px;">物語の盛り上がりを“値動き”で。谷（赤）も越えて、開店でムーン 🚀</div>
+      <canvas id="chart" width="720" height="340" style="width:100%;display:block;"></canvas>
+      <div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:var(--mut);">
+        <span><span style="color:#48d597;">■</span> 上げ週（前進）</span>
+        <span><span style="color:#ff6b6b;">■</span> 下げ週（壁・心折れ）</span>
+        <span><span style="color:var(--gold);">◆</span> 節目</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sec">節目（テントポール）</div>
+      <div id="tentpoles"></div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ===== ボトムタブ ===== -->
 <div class="tabs">
   <div class="tab on" data-p="today"><span class="ic">⚔️</span>クエスト</div>
-  <div class="tab" data-p="cal"><span class="ic">🎬</span>投稿カレンダー</div>
+  <div class="tab" data-p="chart"><span class="ic">📈</span>全体マップ</div>
+  <div class="tab" data-p="cal"><span class="ic">🎬</span>カレンダー</div>
   <div class="tab" data-p="auto"><span class="ic">⏰</span>自動投稿</div>
 </div>
 
 <script>
 const KEY='levelup_takuha_v1';
+const VIEW=new URLSearchParams(location.search).has('view');   // 閲覧モード（lit.link用）
 const START=new Date('2026-06-24T00:00:00');
 const GOAL=new Date('2026-10-01T00:00:00');
 
@@ -311,11 +346,11 @@ function render(){
     el.innerHTML='<div class="chk">✓</div><div class="nm">'+q.nm+
       (q.must?'<span class="must">必須</span>':'')+'</div>'+cam+
       '<div class="pt">+'+q.p+'P</div>';
-    el.onclick=()=>{S.today.done[q.id]=!S.today.done[q.id];
+    el.onclick=()=>{if(VIEW)return;S.today.done[q.id]=!S.today.done[q.id];
       if(!S.today.done[q.id]) delete S.today.cam[q.id];
       save();render();};
     const camEl=el.querySelector('.cam');
-    if(camEl) camEl.onclick=(e)=>{e.stopPropagation();
+    if(camEl) camEl.onclick=(e)=>{e.stopPropagation();if(VIEW)return;
       if(!S.today.done[q.id]) S.today.done[q.id]=true;   // 撮影＝そのアクティビティもやった扱い
       S.today.cam[q.id]=!S.today.cam[q.id]; save();render();};
     box.appendChild(el);
@@ -345,17 +380,99 @@ function renderCal(){
   });
 }
 
+// ===== 全体マップ：暗号通貨ローソク足風チャート =====
+const WEEKS=[
+  {w:'W1', v:8,  tp:'始動宣言（D-100）'},
+  {w:'W2', v:13, tp:''},
+  {w:'W3', v:18, tp:''},
+  {w:'W4', v:14, tp:'物件さがし（壁）'},
+  {w:'W5', v:30, tp:'物件決定'},
+  {w:'W6', v:25, tp:'お金の不安（壁）'},
+  {w:'W7', v:38, tp:'初しゃぶ試作'},
+  {w:'W8', v:36, tp:''},
+  {w:'W9', v:52, tp:'共創スタート'},
+  {w:'W10',v:58, tp:''},
+  {w:'W11',v:68, tp:'シークレット試食会'},
+  {w:'W12',v:71, tp:''},
+  {w:'W13',v:82, tp:'予約開始の号砲'},
+  {w:'W14',v:92, tp:'カウントダウン'},
+  {w:'W15',v:100,tp:'10/1 OPEN 🚀'},
+];
+function buildCandles(){
+  let prev=4, out=[];
+  WEEKS.forEach((d,i)=>{
+    const open=prev, close=d.v;
+    const hi=Math.max(open,close)+(close>=open?5:2);
+    const lo=Math.max(0,Math.min(open,close)-(close>=open?2:5));
+    out.push({...d, open,close,hi,lo, up:close>=open});
+    prev=close;
+  });
+  return out;
+}
+function drawChart(){
+  const cv=document.getElementById('chart'); if(!cv)return;
+  const ctx=cv.getContext('2d'); const W=cv.width,H=cv.height;
+  ctx.clearRect(0,0,W,H);
+  const padL=8,padR=14,padT=16,padB=26;
+  const VMAX=112;
+  const x0=padL, x1=W-padR, y0=padT, y1=H-padB;
+  const y=v=>y1-(v/VMAX)*(y1-y0);
+  // グリッド
+  ctx.strokeStyle='rgba(255,255,255,.06)'; ctx.fillStyle='#5a647e';
+  ctx.font='10px -apple-system,sans-serif'; ctx.lineWidth=1;
+  [0,25,50,75,100].forEach(g=>{ctx.beginPath();ctx.moveTo(x0,y(g));ctx.lineTo(x1,y(g));ctx.stroke();
+    ctx.fillText(g,x1-22,y(g)-3);});
+  const candles=buildCandles();
+  const n=candles.length, slot=(x1-x0)/n, bw=slot*0.52;
+  candles.forEach((c,i)=>{
+    const cx=x0+slot*i+slot/2;
+    const col=c.up?'#48d597':'#ff6b6b';
+    ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=1.5;
+    // ヒゲ
+    ctx.beginPath();ctx.moveTo(cx,y(c.hi));ctx.lineTo(cx,y(c.lo));ctx.stroke();
+    // 実体
+    const yt=y(Math.max(c.open,c.close)), yb=y(Math.min(c.open,c.close));
+    ctx.fillRect(cx-bw/2, yt, bw, Math.max(2,yb-yt));
+    // 節目マーカー
+    if(c.tp){ctx.fillStyle=c.w==='W15'?'#ffcf5c':'#ffcf5c';
+      ctx.beginPath();ctx.moveTo(cx,y(c.hi)-6);ctx.lineTo(cx-3.5,y(c.hi)-12);ctx.lineTo(cx+3.5,y(c.hi)-12);ctx.closePath();ctx.fill();}
+    // 週ラベル（間引き）
+    if(i%2===0||i===n-1){ctx.fillStyle='#5a647e';ctx.fillText(c.w,cx-8,H-9);}
+  });
+  // ゴールの点線
+  ctx.strokeStyle='rgba(255,207,92,.4)';ctx.setLineDash([4,4]);
+  ctx.beginPath();ctx.moveTo(x0,y(100));ctx.lineTo(x1,y(100));ctx.stroke();ctx.setLineDash([]);
+}
+function renderTentpoles(){
+  const box=document.getElementById('tentpoles'); if(!box)return; box.innerHTML='';
+  WEEKS.filter(d=>d.tp).forEach(d=>{
+    const el=document.createElement('div');el.className='tp';
+    el.innerHTML='<div class="w">'+d.w+'</div><div class="t">'+d.tp+'</div><div class="v">指数 '+d.v+'</div>';
+    box.appendChild(el);
+  });
+}
+
 document.querySelectorAll('.tab').forEach(t=>{
   t.onclick=()=>{
     document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
     document.querySelectorAll('.page').forEach(x=>x.classList.remove('on'));
     t.classList.add('on');
     document.getElementById('p-'+t.dataset.p).classList.add('on');
+    if(t.dataset.p==='chart') drawChart();
   };
 });
+
+// ===== 閲覧モード（lit.link用） =====
+if(VIEW){
+  document.body.classList.add('view');
+  document.getElementById('viewBanner').style.display='block';
+  document.getElementById('resetDay').onclick=null;
+}
 document.getElementById('resetDay').onclick=()=>{S.today.done={};S.today.met=false;save();render();};
 
 render();
+renderTentpoles();
+drawChart();
 
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
