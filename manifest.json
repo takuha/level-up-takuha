@@ -1,0 +1,16 @@
+{
+  "name": "LEVEL UP TAKUHA",
+  "short_name": "LEVEL UP",
+  "description": "ルーティンをクエスト化してレベルアップする自分専用アプリ",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0f1a",
+  "theme_color": "#0b0f1a",
+  "lang": "ja",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

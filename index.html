@@ -2,8 +2,16 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <title>LEVEL UP TAKUHA</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b0f1a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LEVEL UP">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
 <style>
   :root{
     --bg:#0b0f1a; --bg2:#121829; --card:#161d33; --line:#26304d;
@@ -48,6 +56,9 @@
   .q .nm{flex:1;font-size:13.5px;}
   .q.done .nm{color:var(--mut);text-decoration:line-through;}
   .q .pt{font-size:12px;font-weight:700;color:var(--accent);}
+  .cam{font-size:10.5px;color:var(--mut);border:1px solid var(--line);border-radius:7px;
+    padding:3px 7px;flex:0 0 auto;cursor:pointer;transition:.15s;white-space:nowrap;}
+  .cam.camon{background:#2a1f10;color:var(--gold);border-color:#5a4520;}
   .q .must{font-size:9px;color:var(--gold);border:1px solid #5a4520;border-radius:5px;padding:1px 4px;margin-left:5px;}
   .tot{display:flex;align-items:center;justify-content:space-between;margin-top:6px;
     background:#161033;border:1px solid #38256e;border-radius:12px;padding:12px 14px;}
@@ -194,13 +205,16 @@ const QUESTS=[
   {id:'shoot',nm:'動画を撮る',             p:50, st:'inf'},
   {id:'set',  nm:'【前夜】明日の投稿を予約セット', p:30, st:'inf'},
   {id:'check',nm:'朝6時の自動投稿を確認',   p:20, st:'dis'},
-  {id:'gym',  nm:'筋トレ',                 p:100,st:'str'},
-  {id:'class',nm:'スペイン語の授業（4h）', p:120,st:'int', must:true},
-  {id:'study',nm:'カフェで自習',           p:40, st:'int'},
+  {id:'gym',  nm:'筋トレ',                 p:100,st:'str', cam:true},
+  {id:'class',nm:'スペイン語の授業（4h）', p:120,st:'int', must:true, cam:true},
+  {id:'study',nm:'カフェで自習',           p:40, st:'int', cam:true},
+  {id:'meal', nm:'自炊ごはん',             p:30, st:'vit', cam:true},
+  {id:'town', nm:'街めぐり・散歩',         p:30, st:'vit', cam:true},
   {id:'edit', nm:'動画を編集して投稿',     p:60, st:'inf'},
   {id:'work', nm:'日本の仕事',             p:80, st:'gold'},
 ];
-const MAXP=QUESTS.reduce((a,q)=>a+q.p,0);
+const CAM=30;  // 撮影ボーナス（コンテンツ化＝影響力UP）
+const MAXP=QUESTS.reduce((a,q)=>a+q.p+(q.cam?CAM:0),0);
 
 const PILLARS={1:'vlog（南米ひとり暮らしの日常）',2:'スペイン語DAY（一緒に学ぼう）',
   3:'アプリ開発（Mi Amigo・自作アプリの裏側）',4:'YouTube公開日',
@@ -225,7 +239,7 @@ const Z=()=>({str:0,int:0,inf:0,gold:0,dis:0,vit:0});
 function load(){
   let s=JSON.parse(localStorage.getItem(KEY)||'null');
   if(!s){s={xpBase:0, statsBase:Z(), streak:0, lastGoalDay:null,
-           today:{date:null, done:{}, p:0, stats:Z(), met:false}};}
+           today:{date:null, done:{}, cam:{}, p:0, stats:Z(), met:false}};}
   const t=todayStr();
   if(s.today.date!==t){
     // 前日分を base に確定
@@ -233,8 +247,9 @@ function load(){
     for(const k in s.statsBase) s.statsBase[k]+=(s.today.stats?s.today.stats[k]:0)||0;
     // ストリーク：昨日ゴール未達なら途切れ
     if(s.lastGoalDay && s.lastGoalDay!==yest(t) && s.lastGoalDay!==t) s.streak=0;
-    s.today={date:t, done:{}, p:0, stats:Z(), met:false};
+    s.today={date:t, done:{}, cam:{}, p:0, stats:Z(), met:false};
   }
+  if(!s.today.cam) s.today.cam={};
   return s;
 }
 let S=load();
@@ -249,7 +264,12 @@ function levelInfo(totalXp){
 function recalc(){
   const d=S.today;
   d.stats=Z(); d.p=0; let cnt=0;
-  QUESTS.forEach(q=>{if(d.done[q.id]){d.stats[q.st]+=Math.round(q.p/10);d.p+=q.p;cnt++;}});
+  QUESTS.forEach(q=>{
+    if(d.done[q.id]){
+      d.stats[q.st]+=Math.round(q.p/10); d.p+=q.p; cnt++;
+      if(q.cam && d.cam[q.id]){d.p+=CAM; d.stats.inf+=Math.round(CAM/10);}
+    }
+  });
   const met = (cnt>=4 && !!d.done['class']);
   // ゴール達成の瞬間にストリークを更新
   if(met && !d.met){
@@ -283,9 +303,21 @@ function render(){
   QUESTS.forEach(q=>{
     const el=document.createElement('div');
     el.className='q'+(S.today.done[q.id]?' done':'');
+    let cam='';
+    if(q.cam){
+      const on=S.today.cam[q.id]?' camon':'';
+      cam='<div class="cam'+on+'" data-cam="'+q.id+'">📹 撮影 +'+CAM+'P</div>';
+    }
     el.innerHTML='<div class="chk">✓</div><div class="nm">'+q.nm+
-      (q.must?'<span class="must">必須</span>':'')+'</div><div class="pt">+'+q.p+'P</div>';
-    el.onclick=()=>{S.today.done[q.id]=!S.today.done[q.id];save();render();};
+      (q.must?'<span class="must">必須</span>':'')+'</div>'+cam+
+      '<div class="pt">+'+q.p+'P</div>';
+    el.onclick=()=>{S.today.done[q.id]=!S.today.done[q.id];
+      if(!S.today.done[q.id]) delete S.today.cam[q.id];
+      save();render();};
+    const camEl=el.querySelector('.cam');
+    if(camEl) camEl.onclick=(e)=>{e.stopPropagation();
+      if(!S.today.done[q.id]) S.today.done[q.id]=true;   // 撮影＝そのアクティビティもやった扱い
+      S.today.cam[q.id]=!S.today.cam[q.id]; save();render();};
     box.appendChild(el);
   });
   renderCal();
@@ -324,6 +356,10 @@ document.querySelectorAll('.tab').forEach(t=>{
 document.getElementById('resetDay').onclick=()=>{S.today.done={};S.today.met=false;save();render();};
 
 render();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
 </script>
 </body>
 </html>
